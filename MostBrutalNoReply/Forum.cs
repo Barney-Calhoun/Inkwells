@@ -14,6 +14,7 @@ namespace MostBrutalNoReply
         {
             ResetNoReplies();
         }
+
         public Forum(int id, string name)
         {
             Id = id;

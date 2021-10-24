@@ -20,22 +20,22 @@ namespace Globals
         };
 
         private static string ToQuestionString<T>(
-            this IEnumerable<T> choices,
+            this IEnumerable<T> selections,
             string question,
-            string defaultChoice = null)
+            string defaultSelection = null)
         {
             return string.Format(
                 "{0} {1}{2}{3}",
                 char.IsPunctuation(question[^1]) ? question[..^1] : question,
-                choices.ToString("|", "(", ")"),
-                string.IsNullOrEmpty(defaultChoice) ? string.Empty : $" [{defaultChoice}]",
+                selections.ToString("|", "(", ")"),
+                string.IsNullOrEmpty(defaultSelection) ? string.Empty : $" [{defaultSelection}]",
                 char.IsPunctuation(question[^1]) ? question[^1].ToString() : string.Empty);
         }
 
-        private static void WriteInputError<T>(this IEnumerable<T> choices)
+        private static void WriteInputError<T>(this IEnumerable<T> selections)
         {
             Console.WriteLine(ErrorMessage);
-            Console.WriteLine($"Select {choices.ToString("', '", "'", "'")}.");
+            Console.WriteLine($"Select {selections.ToString("', '", "'", "'")}.");
         }
 
         public static int ReadNumericalInput(string question = null)
@@ -57,28 +57,30 @@ namespace Globals
         }
 
         public static int ReadNumericalInput(
-            IEnumerable<int> choices,
-            string question = null,
-            int? defaultChoice = null)
+            IEnumerable<int> selections,
+            int? defaultSelection = null,
+            string question = null)
         {
             if (!string.IsNullOrEmpty(question))
             {
-                Console.WriteLine(choices.ToQuestionString(question, defaultChoice?.ToString()));
+                Console.WriteLine(selections.ToQuestionString(question, defaultSelection?.ToString()));
             }
 
             while (true)
             {
                 string input = Console.ReadLine().Trim();
-                if (string.IsNullOrEmpty(input) && defaultChoice != null)
+
+                if (string.IsNullOrEmpty(input) && defaultSelection != null)
                 {
-                    return defaultChoice.Value;
+                    return defaultSelection.Value;
                 }
-                if (int.TryParse(input, out int number) && choices.Contains(number))
+
+                if (int.TryParse(input, out int number) && selections.Contains(number))
                 {
                     return number;
                 }
 
-                choices.WriteInputError();
+                selections.WriteInputError();
             }
         }
 
@@ -93,14 +95,14 @@ namespace Globals
         }
 
         public static string ReadStringInput(
-            IEnumerable<string> choices,
+            IEnumerable<string> selections,
+            string defaultSelection = null,
             bool caseSensitive = false,
-            string question = null,
-            string defaultChoice = null)
+            string question = null)
         {
             if (!string.IsNullOrEmpty(question))
             {
-                Console.WriteLine(choices.ToQuestionString(question, defaultChoice));
+                Console.WriteLine(selections.ToQuestionString(question, defaultSelection));
             }
 
             if (caseSensitive)
@@ -108,37 +110,41 @@ namespace Globals
                 while (true)
                 {
                     string input = Console.ReadLine().Trim();
-                    if (string.IsNullOrEmpty(input) && defaultChoice != null)
+
+                    if (string.IsNullOrEmpty(input) && defaultSelection != null)
                     {
-                        return defaultChoice;
+                        return defaultSelection;
                     }
-                    if (choices.Contains(input))
+
+                    if (selections.Contains(input))
                     {
                         return input;
                     }
 
-                    choices.WriteInputError();
+                    selections.WriteInputError();
                 }
             }
             else
             {
-                var caseInsensitiveChoices = choices
+                var caseInsensitiveSelections = selections
                     .Select(c => new KeyValuePair<string, string>(c.ToLower(), c))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                 while (true)
                 {
                     string input = Console.ReadLine().Trim().ToLower();
-                    if (string.IsNullOrEmpty(input) && defaultChoice != null)
+
+                    if (string.IsNullOrEmpty(input) && defaultSelection != null)
                     {
-                        return defaultChoice;
-                    }
-                    if (caseInsensitiveChoices.ContainsKey(input))
-                    {
-                        return caseInsensitiveChoices[input];
+                        return defaultSelection;
                     }
 
-                    choices.WriteInputError();
+                    if (caseInsensitiveSelections.ContainsKey(input))
+                    {
+                        return caseInsensitiveSelections[input];
+                    }
+
+                    selections.WriteInputError();
                 }
             }
         }
@@ -185,37 +191,79 @@ namespace Globals
             return regexPattern;
         }
 
-        public static string ReadDomain()
-        {
-            Console.WriteLine($"Enter domain [{DefaultDomain}]:");
-
-            var domain = ReadStringInput(
-                @"^\s*[A-Za-z]*\s*$",
-                $"Wrong input, examples: {Domains.ToString("', '", "'", "'")}.");
-
-            if (string.IsNullOrEmpty(domain = domain.Trim().ToLower()))
-            {
-                return DefaultDomain;
-            }
-
-            return domain;
-        }
-
-        public static int ReadAction(IDictionary<int, string> actions, int? defaultAction = null)
+        public static int ReadSelection<TValue>(
+            IDictionary<int, TValue> selections,
+            int? defaultSelection = null,
+            string question = "Select action:")
         {
             Console.WriteLine(
-                actions.Keys.ToQuestionString(
-                    "Select action:",
-                    defaultAction?.ToString()));
+                selections.Keys.ToQuestionString(
+                    question,
+                    defaultSelection?.ToString()));
 
-            foreach (var kvp in actions)
+            var selectionKeyFormat = $"{{0, -{selections.Keys.Max(k => k.ToString().Length + 1)}}}";
+
+            foreach (var kvp in selections)
             {
-                var actionKey = kvp.Key;
-                var actionName = kvp.Value;
-                Console.WriteLine($"{actionKey}. {actionName}");
+                var selectionKey = string.Format(selectionKeyFormat, $"{kvp.Key}.");
+                var selectionValue = kvp.Value;
+                Console.WriteLine($"{selectionKey} {selectionValue}");
             }
 
-            return ReadNumericalInput(actions.Keys, null, defaultAction);
+            return ReadNumericalInput(selections.Keys, defaultSelection, null);
+        }
+
+        public static int ReadSelection<TValue>(
+            IDictionary<int, TValue[]> selections,
+            int? defaultSelection = null,
+            string question = "Select action:")
+        {
+            Console.WriteLine(
+                selections.Keys.ToQuestionString(
+                    question,
+                    defaultSelection?.ToString()));
+
+            var selectionKeyFormat = $"{{0, -{selections.Keys.Max(k => k.ToString().Length + 1)}}}";
+
+            foreach (var kvp in selections)
+            {
+                var selectionKey = string.Format(selectionKeyFormat, $"{kvp.Key}.");
+                var selectionValue = string.Join(' ', kvp.Value);
+                Console.WriteLine($"{selectionKey} {selectionValue}");
+            }
+
+            return ReadNumericalInput(selections.Keys, defaultSelection, null);
+        }
+
+        public static KeyValuePair<int, string> ReadDomain()
+        {
+            var domainKey = ReadSelection(Domains, IncelsDomain, "Select domain:");
+
+            if (domainKey == OtherDomain)
+            {
+                return new KeyValuePair<int, string>(
+                    domainKey,
+                    ReadStringInput("Enter other domain:").Trim().ToLower());
+            }
+
+            return new KeyValuePair<int, string>(domainKey, Domains[domainKey]);
+        }
+
+        public static KeyValuePair<int, string[]> ReadDomains()
+        {
+            var domainKey = ReadSelection(DomainHistory, IncelsDomain, "Select domains:");
+
+            if (domainKey == OtherDomain)
+            {
+                var otherDomains = ReadStringInput("Enter other domains (separated by whitespace):")
+                    .Trim()
+                    .ToLower()
+                    .Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries);
+
+                return new KeyValuePair<int, string[]>(domainKey, otherDomains);
+            }
+
+            return new KeyValuePair<int, string[]>(domainKey, DomainHistory[domainKey]);
         }
 
         public static string ReadPassword()
@@ -251,22 +299,22 @@ namespace Globals
             return password;
         }
 
-        public static bool ReadConfirmation(string question = null, string defaultChoice = null)
+        public static bool ReadConfirmation(string question = null, string defaultSelection = null)
         {
             if (!string.IsNullOrEmpty(question))
             {
                 Console.WriteLine(
                     ConfirmationActions.Keys.ToQuestionString(
                         question,
-                        defaultChoice));
+                        defaultSelection));
             }
 
             return ConfirmationActions[
                 ReadStringInput(
                     ConfirmationActions.Keys,
+                    defaultSelection,
                     false,
-                    null,
-                    defaultChoice)];
+                    null)];
         }
 
         public static void WaitForExit()

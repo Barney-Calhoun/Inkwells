@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using Newtonsoft.Json;
+using System.IO;
 using System.Linq;
 
 namespace Globals
@@ -22,6 +23,27 @@ namespace Globals
                 .Select(l => l.Trim())
                 .Where(l => l.Length > 0)
                 .ToArray();
+        }
+
+        public static T DeserializeObjectFromFile<T>(string filePath)
+        {
+            if (!File.Exists(filePath))
+            {
+                return default;
+            }
+
+            return JsonConvert.DeserializeObject<T>(
+                File.ReadAllText(
+                    filePath));
+        }
+
+        public static void SerializeObjectToFile(string filePath, object value)
+        {
+            File.WriteAllText(
+                filePath,
+                JsonConvert.SerializeObject(
+                    value,
+                    Formatting.Indented));
         }
     }
 }

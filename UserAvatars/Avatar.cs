@@ -1,4 +1,5 @@
-﻿using static Globals.IEnumerableMethods;
+﻿using static Globals.Constants;
+using static Globals.IEnumerableMethods;
 using System.IO;
 using System.Linq;
 
@@ -12,6 +13,7 @@ namespace UserAvatars
         public string Extension { get; set; }
 
         public Avatar() { }
+
         public Avatar(string archiveUrl, string source, string directory, string extension)
         {
             ArchiveUrl = archiveUrl;
@@ -34,20 +36,34 @@ namespace UserAvatars
             return ArchiveUrl[startIndex..endIndex].ToLower();
         }
 
-        public string GetArchiveDate()
+        public string GetDomain()
         {
-            var slashIndexes = ArchiveUrl.FindIndexes(c => c == '/').ToArray();
-            var startIndex = slashIndexes[^9] + 1;
-            var endIndex = slashIndexes[^8];
+            var startIndex = ArchiveUrl
+                .FindIndexes(c => c == '/')
+                .Where(i => i > ArchiveBaseUrl.Length)
+                .First() + 1;
 
-            return ArchiveUrl[startIndex..endIndex];
+            var endIndex = ArchiveUrl.LastIndexOf("/data/avatars/");
+
+            var domainUrl = ArchiveUrl[startIndex..endIndex];
+
+            startIndex = domainUrl.IndexOf(':') + 1;
+
+            return domainUrl[startIndex..].Trim('/').ToLower();
         }
 
         public string GetDate()
         {
             var startIndex = ArchiveUrl.LastIndexOf('?');
 
-            return startIndex < 0 ? string.Empty : ArchiveUrl[(startIndex + 1)..];
+            if (startIndex < 0)
+            {
+                return string.Empty;
+            }
+
+            startIndex++;
+
+            return ArchiveUrl[startIndex..];
         }
 
         public int GetUserId()
@@ -58,15 +74,33 @@ namespace UserAvatars
             return int.Parse(ArchiveUrl[startIndex..endIndex]);
         }
 
+        public string GetDateOrUserId()
+        {
+            var date = GetDate();
+
+            return string.IsNullOrEmpty(date) ? GetUserId().ToString() : date;
+        }
+
+        public string GetArchiveDate()
+        {
+            var startIndex = ArchiveBaseUrl.Length + 1;
+            var endIndex = ArchiveUrl
+                .FindIndexes(c => c == '/')
+                .Where(i => i > ArchiveBaseUrl.Length)
+                .First();
+
+            return ArchiveUrl[startIndex..endIndex];
+        }
+
         public string GetName()
         {
             var separator = AvatarHelper.NameSeparator;
             var size = GetSize();
+            var domain = GetDomain();
+            var dateOrUserId = GetDateOrUserId();
             var archiveDate = GetArchiveDate();
-            var date = GetDate();
-            var dateOrUserId = string.IsNullOrEmpty(date) ? GetUserId().ToString() : date;
 
-            return $"{size}{separator}{archiveDate}{separator}{dateOrUserId}";
+            return $"{size}{separator}{domain}{separator}{dateOrUserId}{separator}{archiveDate}";
         }
 
         public string GetFileName()
@@ -78,7 +112,7 @@ namespace UserAvatars
         {
             var directory = string.IsNullOrEmpty(avatarDirectory) ? Directory : avatarDirectory;
 
-            return $"{directory}{Path.DirectorySeparatorChar}{GetFileName()}";
+            return Path.Combine(directory, GetFileName());
         }
     }
 }

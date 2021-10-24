@@ -1,8 +1,8 @@
 ﻿using static Globals.ConsoleMethods;
 using static Globals.Constants;
+using static Globals.FileMethods;
 using static Globals.WebMethods;
 using Globals;
-using Newtonsoft.Json;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using System;
@@ -20,11 +20,41 @@ namespace MostBrutalNoReply
         const string ThreadCacheFile = "ThreadCache.json";
         const string ResultFile = "MostBrutalNoReply.txt";
 
+        const int ActionRestart = 1;
+        const int ActionContinueWithoutLogin = 2;
+        const int ActionExit = 3;
+        static readonly SortedDictionary<int, string> LoginErrorActions = new SortedDictionary<int, string>()
+        {
+            { ActionRestart, "Restart." },
+            { ActionContinueWithoutLogin, "Continue without logging in." },
+            { ActionExit, "Exit." }
+        };
+
         static ChromeDriver Driver;
 
         static void Main()
         {
+        Start:
             var domain = ReadDomain();
+
+            InitChromeDriver(out Driver);
+
+            ExitSignal.InitSignal(Driver);
+
+            if (Driver.CaptchaDetected(domain.Value))
+            {
+                if (ReadConfirmation("Restart?", TrueAction))
+                {
+                    Console.Clear();
+                    Driver.Quit();
+                    goto Start;
+                }
+                else
+                {
+                    Driver.Quit();
+                    return;
+                }
+            }
 
             var userNameOrEmail = ReadStringInput("Enter user name or email (leave blank to skip):");
 
@@ -32,38 +62,52 @@ namespace MostBrutalNoReply
                 ? string.Empty
                 : ReadPassword();
 
-            InitChromeDriver(out Driver);
+            if (!string.IsNullOrEmpty(userNameOrEmail))
+            {
+                var baseUrl = Driver.GetBaseForumUrl(domain.Value, DefaultRefreshBy);
 
-            ExitSignal.InitSignal(Driver);
+                Driver.Login(
+                    $"{baseUrl}?login",
+                    userNameOrEmail,
+                    userPassword,
+                    By.Name("login"),
+                    By.Name("password"),
+                    By.ClassName("button--icon--login"),
+                    DefaultRefreshBy);
 
-            PrintResults(FindMostBrutalNoReply(domain, userNameOrEmail, userPassword));
+                var loginErrors = Driver.FindElements(By.ClassName("blockMessage--error"));
+
+                if (loginErrors.Count > 0)
+                {
+                    Console.WriteLine(loginErrors.First().Text);
+
+                    var action = ReadSelection(LoginErrorActions);
+
+                    switch (action)
+                    {
+                        case ActionRestart:
+                            Console.Clear();
+                            Driver.Quit();
+                            goto Start;
+                        case ActionExit:
+                            Driver.Quit();
+                            return;
+                        default:
+                            break;
+                    }
+                }
+            }
+
+            Directory.CreateDirectory(domain.Value);
+            Directory.SetCurrentDirectory(domain.Value);
+
+            PrintResults(FindMostBrutalNoReply(domain));
 
             Driver.Quit();
 
             Console.WriteLine(SuccessMessage);
             
             WaitForExit();
-        }
-
-        static List<string> GetForumUrls(string parentForumUrl, List<string> forumUrls = null)
-        {
-            forumUrls ??= new List<string>();
-
-            Driver.GoToUrlWithRetries(parentForumUrl, DefaultRefreshBy);
-
-            var forumLinks = Driver
-                .FindElementsByXPath("//h3[@class='node-title']/a")
-                .Select(link => link.GetAttribute("href"))
-                .Where(link => !link.Contains("rules-faq.27"))
-                .ToArray();
-
-            foreach (var forumLink in forumLinks)
-            {
-                forumUrls.Add(forumLink);
-                forumUrls = GetForumUrls(forumLink, forumUrls);
-            }
-
-            return forumUrls;
         }
 
         static int GetIdFromUrl(string url)
@@ -73,42 +117,32 @@ namespace MostBrutalNoReply
             return int.Parse(url.TrimEnd('/')[startIndex..]);
         }
 
-        static ThreadCache FindMostBrutalNoReply(string domain, string userNameOrEmail, string userPassword)
+        static ThreadCache FindMostBrutalNoReply(KeyValuePair<int, string> domain)
         {
-            var baseUrl = $"https://incels.{domain}";
-
             Driver.ExecuteScript("window.open('');");
             var windowHandle1 = Driver.WindowHandles.ElementAt(0);
             var windowHandle2 = Driver.WindowHandles.ElementAt(1);
             Driver.SwitchTo().Window(windowHandle1);
 
-            if (!string.IsNullOrEmpty(userNameOrEmail) && !string.IsNullOrEmpty(userPassword))
-            {
-                Driver.LoginWithRetries(
-                    $"{baseUrl}/login/login",
-                    userNameOrEmail,
-                    userPassword,
-                    By.Name("login"),
-                    By.Name("password"),
-                    By.ClassName("button--icon--login"),
-                    DefaultRefreshBy);
-            }
-
             var threadCache = File.Exists(ThreadCacheFile)
-                ? JsonConvert.DeserializeObject<ThreadCache>(File.ReadAllText(ThreadCacheFile))
+                ? DeserializeObjectFromFile<ThreadCache>(ThreadCacheFile)
                 : new ThreadCache();
+
             threadCache.ResetForumsById();
 
-            var forumUrls = GetForumUrls(baseUrl);
+            var forumUrls = Driver.GetForumUrls($"https://{domain.Value}", DefaultRefreshBy);
 
             foreach (var forumUrl in forumUrls)
             {
-                Driver.GoToUrlWithRetries(forumUrl + "?order=reply_count&direction=desc", DefaultRefreshBy);
+                Driver.GoToUrlWithRetries(
+                    $"{forumUrl}&order=reply_count&direction=desc",
+                    DefaultRefreshBy);
 
-                var forumId = GetIdFromUrl(forumUrl);
-                var forumName = Driver.FindElementByClassName("p-title-value").Text;
+                var forum = new Forum(
+                    GetIdFromUrl(forumUrl),
+                    Driver.FindElement(By.ClassName("p-title-value")).Text);
 
-                threadCache.ForumsById[forumId] = new Forum(forumId, forumName);
+                threadCache.ForumsById[forum.Id] = forum;
 
                 var page = 0;
 
@@ -117,7 +151,7 @@ namespace MostBrutalNoReply
                     page++;
 
                     var threadUrls = Driver
-                        .FindElementsByXPath("//li[@class='structItem-startDate']/a")
+                        .FindElements(By.XPath("//li[@class='structItem-startDate']/a"))
                         .Select(url => url.GetAttribute("href"))
                         .ToArray();
 
@@ -129,50 +163,53 @@ namespace MostBrutalNoReply
                     {
                         var threadId = GetIdFromUrl(threadUrl);
 
-                        if (!threadCache.ThreadIds.Contains(threadId))
+                        if (threadCache.ThreadIds.Contains(threadId))
                         {
-                            Console.WriteLine($"{forumName} | Page {page} | {threadUrl.TrimEnd('/')}");
+                            continue;
+                        }
 
-                            Driver.GoToUrlWithRetries(threadUrl, DefaultRefreshBy);
+                        Console.WriteLine($"{forum.Name} | Page {page} | {threadUrl.TrimEnd('/')}");
 
-                            var postDateTimes = Driver
-                                .FindElementsByXPath("//ul[contains(@class,'message-attribution-main')]//time[@class='u-dt']")
-                                .Select(dateTime => DateTime.Parse(dateTime.GetAttribute("datetime")))
-                                .ToArray();
+                        Driver.GoToUrlWithRetries(threadUrl, DefaultRefreshBy);
 
-                            if (postDateTimes.Length > 1)
+                        var postDateTimes = Driver
+                            .FindElements(By.XPath("//ul[contains(@class,'message-attribution-main')]//time[@class='u-dt']"))
+                            .Select(dateTime => DateTime.Parse(dateTime.GetAttribute("datetime")))
+                            .ToArray();
+
+                        if (postDateTimes.Length > 1)
+                        {
+                            var threadDate = postDateTimes[0];
+                            var firstReplyDate = postDateTimes[1];
+                            var dateDiff = firstReplyDate - threadDate;
+                            var dateDiffMaxComparison = dateDiff
+                                .CompareTo(forum.MaxThreadAndFirstReplyDifference);
+
+                            if (dateDiffMaxComparison > 0)
                             {
-                                var threadDate = postDateTimes[0];
-                                var firstReplyDate = postDateTimes[1];
-                                var difference = firstReplyDate - threadDate;
-                                var comparison = difference
-                                    .CompareTo(threadCache.ForumsById[forumId].MaxThreadAndFirstReplyDifference);
-                                if (comparison > 0)
+                                forum.MaxThreadAndFirstReplyDifference = dateDiff;
+                                forum.MostBrutalNoReplyThreadUrls = new List<string>
                                 {
-                                    threadCache.ForumsById[forumId].MaxThreadAndFirstReplyDifference = difference;
-                                    threadCache.ForumsById[forumId].MostBrutalNoReplyThreadUrls = new List<string>
-                                    {
-                                        threadUrl
-                                    };
-                                }
-                                else if (comparison == 0)
-                                {
-                                    threadCache.ForumsById[forumId].MostBrutalNoReplyThreadUrls.Add(threadUrl);
-                                }
-
-                                threadCache.ThreadIds.Add(threadId);
+                                    threadUrl
+                                };
                             }
-                            else if (page > 1)
+                            else if (dateDiffMaxComparison == 0)
                             {
-                                zeroReplies = true;
-                                break;
+                                forum.MostBrutalNoReplyThreadUrls.Add(threadUrl);
                             }
+
+                            threadCache.ThreadIds.Add(threadId);
+                        }
+                        else if (page > 1)
+                        {
+                            zeroReplies = true;
+                            break;
                         }
                     }
 
                     Driver.SwitchTo().Window(windowHandle1);
 
-                    var nextButtons = Driver.FindElementsByClassName("pageNav-jump--next");
+                    var nextButtons = Driver.FindElements(By.ClassName("pageNav-jump--next"));
 
                     if (!zeroReplies && nextButtons.Count > 0)
                     {
@@ -189,7 +226,7 @@ namespace MostBrutalNoReply
 
             threadCache.UpdatetMostBrutalNoReplyThreadUrls();
 
-            File.WriteAllText(ThreadCacheFile, JsonConvert.SerializeObject(threadCache, Formatting.Indented));
+            SerializeObjectToFile(ThreadCacheFile, threadCache);
 
             return threadCache;
         }
@@ -199,6 +236,7 @@ namespace MostBrutalNoReply
             var forums = threadCache.ForumsById.Values;
 
             var maxForumNameLength = forums.Max(f => f.Name.Length);
+
             if (AllForumsName.Length > maxForumNameLength || ForumHeader.Length > maxForumNameLength)
             {
                 maxForumNameLength = AllForumsName.Length > ForumHeader.Length
@@ -207,6 +245,7 @@ namespace MostBrutalNoReply
             }
 
             var maxThreadUrlLength = forums.Max(f => f.MostBrutalNoReplyThreadUrls.Max(t => t.Length));
+
             if (MostBrutalNoReplyThreadsHeader.Length > maxThreadUrlLength)
             {
                 maxThreadUrlLength = MostBrutalNoReplyThreadsHeader.Length;
@@ -217,6 +256,7 @@ namespace MostBrutalNoReply
             var resultFormat = $"{{0, -{maxForumNameLength}}} | {{1}}{Environment.NewLine}";
 
             var result = string.Empty;
+
             result += hyphens;
             result += string.Format(resultFormat, ForumHeader, MostBrutalNoReplyThreadsHeader);
 
@@ -226,6 +266,7 @@ namespace MostBrutalNoReply
                 {
                     result += hyphens;
                 }
+
                 result += string.Format(
                     resultFormat,
                     i == 0 ? AllForumsName : string.Empty,
@@ -235,6 +276,7 @@ namespace MostBrutalNoReply
             foreach (var forum in forums)
             {
                 result += hyphens;
+
                 for (int i = 0; i < forum.MostBrutalNoReplyThreadUrls.Count; i++)
                 {
                     result += string.Format(
