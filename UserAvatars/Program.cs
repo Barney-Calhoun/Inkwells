@@ -20,7 +20,7 @@ namespace UserAvatars
         const int ActionGetAvatars = 1;
         const int ActionUpdateAvatarUrlFiles = 2;
         const int ActionExit = 3;
-        static readonly SortedDictionary<int, string> Actions = new SortedDictionary<int, string>()
+        static readonly SortedDictionary<int, string> Actions = new()
         {
             { ActionGetAvatars, "Get avatars." },
             { ActionUpdateAvatarUrlFiles, "Update avatar URL files." },

@@ -13,7 +13,7 @@ namespace Globals
 
         public const string TrueAction = "Y";
         public const string FalseAction = "N";
-        public static readonly Dictionary<string, bool> ConfirmationActions = new Dictionary<string, bool>()
+        public static readonly Dictionary<string, bool> ConfirmationActions = new()
         {
             { TrueAction, true },
             { FalseAction, false }
@@ -63,7 +63,10 @@ namespace Globals
         {
             if (!string.IsNullOrEmpty(question))
             {
-                Console.WriteLine(selections.ToQuestionString(question, defaultSelection?.ToString()));
+                Console.WriteLine(
+                    selections.ToQuestionString(
+                        question,
+                        defaultSelection?.ToString()));
             }
 
             while (true)
@@ -102,7 +105,10 @@ namespace Globals
         {
             if (!string.IsNullOrEmpty(question))
             {
-                Console.WriteLine(selections.ToQuestionString(question, defaultSelection));
+                Console.WriteLine(
+                    selections.ToQuestionString(
+                        question,
+                        defaultSelection));
             }
 
             if (caseSensitive)
@@ -177,7 +183,7 @@ namespace Globals
             {
                 try
                 {
-                    new Regex(regexPattern = Console.ReadLine().Trim());
+                    _ = new Regex(regexPattern = Console.ReadLine().Trim());
                 }
                 catch (Exception e)
                 {
@@ -207,6 +213,7 @@ namespace Globals
             {
                 var selectionKey = string.Format(selectionKeyFormat, $"{kvp.Key}.");
                 var selectionValue = kvp.Value;
+
                 Console.WriteLine($"{selectionKey} {selectionValue}");
             }
 
@@ -229,6 +236,7 @@ namespace Globals
             {
                 var selectionKey = string.Format(selectionKeyFormat, $"{kvp.Key}.");
                 var selectionValue = string.Join(' ', kvp.Value);
+
                 Console.WriteLine($"{selectionKey} {selectionValue}");
             }
 
@@ -279,6 +287,7 @@ namespace Globals
                 if (info.Key != ConsoleKey.Backspace)
                 {
                     Console.Write("*");
+
                     password += info.KeyChar;
                 }
                 else if (!string.IsNullOrEmpty(password))
@@ -286,6 +295,7 @@ namespace Globals
                     password = password[..^1];
 
                     var pos = Console.CursorLeft;
+
                     Console.SetCursorPosition(pos - 1, Console.CursorTop);
                     Console.Write(" ");
                     Console.SetCursorPosition(pos - 1, Console.CursorTop);
@@ -312,9 +322,7 @@ namespace Globals
             return ConfirmationActions[
                 ReadStringInput(
                     ConfirmationActions.Keys,
-                    defaultSelection,
-                    false,
-                    null)];
+                    defaultSelection)];
         }
 
         public static void WaitForExit()

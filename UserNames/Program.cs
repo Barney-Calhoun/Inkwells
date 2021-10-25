@@ -29,7 +29,7 @@ namespace UserNames
         const int ActionSearchDeletedUsers = 3;
         const int ActionSearchGuestUsers = 4;
         const int ActionExit = 5;
-        static readonly SortedDictionary<int, string> UserNameActions = new SortedDictionary<int, string>()
+        static readonly SortedDictionary<int, string> UserNameActions = new()
         {
             { ActionSearchUsersByKeywords, "Search users by keywords." },
             { ActionSearchUsersByRegex, "Search users by a regular expression." },
@@ -40,7 +40,7 @@ namespace UserNames
 
         const int ActionCreateNewUserDictionary = 1;
         const int ActionUseExistingUserDictionary = 2;
-        static readonly SortedDictionary<int, string> UserDictionaryActions = new SortedDictionary<int, string>()
+        static readonly SortedDictionary<int, string> UserDictionaryActions = new()
         {
             { ActionCreateNewUserDictionary, "Create new user dictionary." },
             { ActionUseExistingUserDictionary, "Use existing user dictionary if available." },

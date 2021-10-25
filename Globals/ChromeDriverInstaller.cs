@@ -18,7 +18,7 @@ namespace Globals
 
             // Instructions from "https://chromedriver.chromium.org/downloads/version-selection".
             // First, find out which version of Chrome you are using. Let's say you have Chrome 72.0.3626.81.
-            if (chromeVersion == null)
+            if (string.IsNullOrEmpty(chromeVersion))
             {
                 chromeVersion = GetChromeVersion();
             }

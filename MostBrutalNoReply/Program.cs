@@ -23,7 +23,7 @@ namespace MostBrutalNoReply
         const int ActionRestart = 1;
         const int ActionContinueWithoutLogin = 2;
         const int ActionExit = 3;
-        static readonly SortedDictionary<int, string> LoginErrorActions = new SortedDictionary<int, string>()
+        static readonly SortedDictionary<int, string> LoginErrorActions = new()
         {
             { ActionRestart, "Restart." },
             { ActionContinueWithoutLogin, "Continue without logging in." },
@@ -112,9 +112,20 @@ namespace MostBrutalNoReply
 
         static int GetIdFromUrl(string url)
         {
-            int startIndex = url.LastIndexOf('.') + 1;
+            while (!char.IsDigit(url[^1]))
+            {
+                url = url[..^1];
+            }
 
-            return int.Parse(url.TrimEnd('/')[startIndex..]);
+            var id = string.Empty;
+
+            while (char.IsDigit(url[^1]))
+            {
+                id = url[^1] + id;
+                url = url[..^1];
+            }
+
+            return int.Parse(id);
         }
 
         static ThreadCache FindMostBrutalNoReply(KeyValuePair<int, string> domain)

@@ -20,7 +20,7 @@ namespace Globals
         public const int SanctionedSuicideDomain = 9;
         public const int OtherDomain = 10;
         public const int DefaultDomain = IncelsDomain;
-        public static readonly SortedDictionary<int, string> Domains = new SortedDictionary<int, string>()
+        public static readonly SortedDictionary<int, string> Domains = new()
         {
             { IncelsDomain, "incels.is" },
             { IncelsNetDomain, "incels.net" },
@@ -33,7 +33,7 @@ namespace Globals
             { SanctionedSuicideDomain, "sanctioned-suicide.org" },
             { OtherDomain, "Other." }
         };
-        public static readonly SortedDictionary<int, string[]> DomainHistory = new SortedDictionary<int, string[]>()
+        public static readonly SortedDictionary<int, string[]> DomainHistory = new()
         {
             {
                 IncelsDomain,
