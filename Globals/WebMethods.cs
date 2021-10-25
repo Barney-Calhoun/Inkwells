@@ -15,6 +15,7 @@ namespace Globals
         private const int DefaultRetryCount = 30;
 
         private static readonly TimeSpan DefaultTimeOut = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan DefaultPollingInterval = TimeSpan.FromMilliseconds(250);
 
         public static void InitChromeDriver(out ChromeDriver driver, string directory = null)
@@ -48,7 +49,7 @@ namespace Globals
             options.AddArgument("--log-level=3");
             options.AddArgument("--output=/dev/null");
 
-            driver = new ChromeDriver(service, options);
+            driver = new ChromeDriver(service, options, DefaultCommandTimeout);
             driver.Manage().Timeouts().PageLoad = DefaultTimeOut;
         }
 
