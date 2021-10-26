@@ -12,20 +12,14 @@ namespace MostBrutalNoReply
 
         public Forum()
         {
-            ResetNoReplies();
+            MaxThreadAndFirstReplyDifference = new TimeSpan(0, 0, 0, 0, 0);
+            MostBrutalNoReplyThreadUrls = new List<string>();
         }
 
-        public Forum(int id, string name)
+        public Forum(int id, string name) : this()
         {
             Id = id;
             Name = name;
-            ResetNoReplies();
-        }
-
-        public void ResetNoReplies()
-        {
-            MaxThreadAndFirstReplyDifference = new TimeSpan(0, 0, 0, 0, 0);
-            MostBrutalNoReplyThreadUrls = new List<string>();
         }
     }
 }

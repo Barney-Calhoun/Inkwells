@@ -16,6 +16,7 @@ namespace MostBrutalNoReply
     {
         const string ForumHeader = "Forum";
         const string MostBrutalNoReplyThreadsHeader = "Most Brutal No-Reply Threads";
+
         const string AllForumsName = "All Forums";
         const string ThreadCacheFile = "ThreadCache.json";
         const string ResultFile = "MostBrutalNoReply.txt";
@@ -139,21 +140,38 @@ namespace MostBrutalNoReply
                 ? DeserializeObjectFromFile<ThreadCache>(ThreadCacheFile)
                 : new ThreadCache();
 
-            threadCache.ResetForumsById();
+            var forumUrlsById = Driver
+                .GetForumUrls($"https://{domain.Value}", DefaultRefreshBy)
+                .Select(url => new KeyValuePair<int, string>(GetIdFromUrl(url), url))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-            var forumUrls = Driver.GetForumUrls($"https://{domain.Value}", DefaultRefreshBy);
+            var deletedForumIds = threadCache.ForumsById.Keys.Except(forumUrlsById.Keys);
 
-            foreach (var forumUrl in forumUrls)
+            foreach (var forumId in deletedForumIds)
+            {
+                threadCache.ForumsById.Remove(forumId);
+            }
+
+            foreach (var forumKvp in forumUrlsById)
             {
                 Driver.GoToUrlWithRetries(
-                    $"{forumUrl}&order=reply_count&direction=desc",
+                    $"{forumKvp.Value}&order=reply_count&direction=desc",
                     DefaultRefreshBy);
 
-                var forum = new Forum(
-                    GetIdFromUrl(forumUrl),
-                    Driver.FindElement(By.ClassName("p-title-value")).Text);
+                Forum forum;
+                var forumId = forumKvp.Key;
+                var forumName = Driver.FindElement(By.ClassName("p-title-value")).Text;
 
-                threadCache.ForumsById[forum.Id] = forum;
+                if (threadCache.ForumsById.ContainsKey(forumId))
+                {
+                    forum = threadCache.ForumsById[forumId];
+                    forum.Name = forumName;
+                }
+                else
+                {
+                    forum = new Forum(forumId, forumName);
+                    threadCache.ForumsById[forum.Id] = forum;
+                }
 
                 var page = 0;
 
@@ -161,23 +179,37 @@ namespace MostBrutalNoReply
                 {
                     page++;
 
-                    var threadUrls = Driver
+                    var threadUrlsById = Driver
                         .FindElements(By.XPath("//li[@class='structItem-startDate']/a"))
-                        .Select(url => url.GetAttribute("href"))
-                        .ToArray();
+                        .Select(a =>
+                        {
+                            var url = a.GetAttribute("href");
+
+                            return new KeyValuePair<int, string>(GetIdFromUrl(url), url);
+                        })
+                        .Where(kvp => !threadCache.ThreadIds.Contains(kvp.Key))
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+                    var stickyThreadCount = Driver
+                        .FindElements(By.ClassName("structItem-status--sticky"))
+                        .Count;
 
                     Driver.SwitchTo().Window(windowHandle2);
 
+                    var threadCounter = 0;
                     var zeroReplies = false;
 
-                    foreach (var threadUrl in threadUrls)
+                    if (threadUrlsById.Count == 0)
                     {
-                        var threadId = GetIdFromUrl(threadUrl);
+                        Console.WriteLine($"{forum.Name} | Page {page}");
+                    }
 
-                        if (threadCache.ThreadIds.Contains(threadId))
-                        {
-                            continue;
-                        }
+                    foreach (var threadKvp in threadUrlsById)
+                    {
+                        threadCounter++;
+
+                        var threadId = threadKvp.Key;
+                        var threadUrl = threadKvp.Value;
 
                         Console.WriteLine($"{forum.Name} | Page {page} | {threadUrl.TrimEnd('/')}");
 
@@ -211,7 +243,7 @@ namespace MostBrutalNoReply
 
                             threadCache.ThreadIds.Add(threadId);
                         }
-                        else if (page > 1)
+                        else if (threadCounter > stickyThreadCount)
                         {
                             zeroReplies = true;
                             break;
@@ -246,7 +278,9 @@ namespace MostBrutalNoReply
         {
             var forums = threadCache.ForumsById.Values;
 
-            var maxForumNameLength = forums.Max(f => f.Name.Length);
+            var maxForumNameLength = forums.Count > 0
+                ? forums.Max(f => f.Name.Length)
+                : 0;
 
             if (AllForumsName.Length > maxForumNameLength || ForumHeader.Length > maxForumNameLength)
             {
@@ -255,14 +289,28 @@ namespace MostBrutalNoReply
                     : ForumHeader.Length;
             }
 
-            var maxThreadUrlLength = forums.Max(f => f.MostBrutalNoReplyThreadUrls.Max(t => t.Length));
+            var maxThreadUrlLength = 0;
+
+            if (forums.Count > 0)
+            {
+                maxThreadUrlLength = forums.Max(f =>
+                {
+                    if (f.MostBrutalNoReplyThreadUrls.Count > 0)
+                    {
+                        return f.MostBrutalNoReplyThreadUrls.Max(t => t.Length);
+                    }
+
+                    return 0;
+                });
+            }
 
             if (MostBrutalNoReplyThreadsHeader.Length > maxThreadUrlLength)
             {
                 maxThreadUrlLength = MostBrutalNoReplyThreadsHeader.Length;
             }
 
-            var hyphens = new string('-', maxForumNameLength + maxThreadUrlLength + 3) + Environment.NewLine;
+            var hyphens = new string('-', maxForumNameLength + maxThreadUrlLength + 3)
+                + Environment.NewLine;
 
             var resultFormat = $"{{0, -{maxForumNameLength}}} | {{1}}{Environment.NewLine}";
 

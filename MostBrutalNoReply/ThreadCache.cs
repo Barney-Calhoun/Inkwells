@@ -12,13 +12,8 @@ namespace MostBrutalNoReply
         public ThreadCache()
         {
             ThreadIds = new HashSet<int>();
-            MostBrutalNoReplyThreadUrls = new List<string>();
-            ResetForumsById();
-        }
-
-        public void ResetForumsById()
-        {
             ForumsById = new Dictionary<int, Forum>();
+            MostBrutalNoReplyThreadUrls = new List<string>();
         }
 
         public void UpdatetMostBrutalNoReplyThreadUrls()
